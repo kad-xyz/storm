@@ -79,6 +79,19 @@ user: check the payment part
 `→id` links a comment to a sticker (click it to select the sticker). Pressing an answer button appends
 `answer @q1: Yes` to the file.
 
+## Board agent
+
+The chat panel talks to a [Claude Code](https://docs.claude.com/en/docs/claude-code) agent running headless
+on your machine (`claude -p`, your own subscription — no API key). Each board has its own resumable session
+(`boards/<slug>.session`). The agent reads the code and edits the board file; its replies land in the chat.
+
+- `repo: ~/path/to/repo` in the board header gives it read access to that repository.
+- `model: haiku|sonnet|opus` picks the model (default `sonnet`).
+- Read-only by design: `Read`, `Grep`, `Glob`, `git log/show/diff/blame`, Yandex Tracker read tools,
+  GitLab MR `info/diff/notes`; `Edit` only for its own board file. User settings are not loaded.
+- Messages sent while it works are delivered as one batch. **Готово ›** on the step strip tells it the step is done.
+- Set `STORM_CLAUDE` to use another `claude` binary.
+
 ## On the canvas
 
 - **Option+1…8** or the legend buttons add a sticker; double-click to edit its text.

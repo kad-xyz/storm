@@ -19,7 +19,7 @@ function parseItem(line, index) {
 
 export function parse(text) {
   const lines = text.split('\n')
-  const board = { title: '', phase: null, flows: [], lines }
+  const board = { title: '', phase: null, meta: {}, flows: [], lines }
   const hasFlows = lines.some((l) => FLOW_RE.test(l))
   let flow = hasFlows ? null : { name: null, from: null, headerLine: null, items: [] }
   if (flow) board.flows.push(flow)
@@ -35,7 +35,9 @@ export function parse(text) {
       if (title && !board.title) board.title = title[1].trim()
       const phase = /^phase:\s*(\d+)\s*$/.exec(line)
       if (phase) board.phase = Number(phase[1])
-      if (title || phase || !flow) return
+      const meta = !phase && !/^phase:/.test(line) && /^([a-z]+):\s*(.+?)\s*$/.exec(line)
+      if (meta && !TYPES.includes(meta[1])) board.meta[meta[1]] = meta[2]
+      if (title || phase || meta || !flow) return
     }
     const item = parseItem(line, i)
     if (item) flow.items.push(item)

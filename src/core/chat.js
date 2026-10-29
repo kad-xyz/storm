@@ -37,3 +37,23 @@ export function answerLine(text, id, option) {
   const ask = parseChat(text).find((m) => m.kind === 'ask' && m.id === id)
   return ask && ask.options.includes(option) ? `answer @${id}: ${option}` : null
 }
+
+// The agent's final reply -> chat lines. Chat-format agent/ask lines pass through, plain text is grouped
+// by paragraph into agent lines; anything that looks like the person's own line is wrapped.
+export function replyToLines(reply) {
+  const out = []
+  let para = []
+  const flush = () => {
+    if (para.length) out.push(`agent: ${para.join(' ')}`)
+    para = []
+  }
+  for (const raw of (reply ?? '').split('\n')) {
+    const line = raw.trim()
+    if (!line) { flush(); continue }
+    if (/^(agent|ask)(\s+@\S+)?\s*:/.test(line)) { flush(); out.push(line); continue }
+    if (/^(user|answer)(\s+@\S+)?\s*:/.test(line)) { flush(); out.push(`agent: ${line}`); continue }
+    para.push(line.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^(#+|[-*]|\d+\.)\s+/, ''))
+  }
+  flush()
+  return out
+}

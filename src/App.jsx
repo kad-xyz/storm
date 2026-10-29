@@ -5,7 +5,7 @@ import { layout } from './core/layout.js'
 import { toElements } from './scene.js'
 import { PHASES } from './phases.js'
 import { STICKERS } from './stickers.js'
-import { answer, clientId, getBoard, listBoards, postOps, putExtras, subscribe } from './api.js'
+import { answer, say, clientId, getBoard, listBoards, postOps, putExtras, subscribe } from './api.js'
 import ChatPanel, { pendingQuestions } from './ChatPanel.jsx'
 import { elementId } from './ids.js'
 import { sceneToOps } from './diff.js'
@@ -19,6 +19,7 @@ export default function App() {
   const [board, setBoard] = useState(null)
   const [missing, setMissing] = useState(false)
   const [chat, setChat] = useState('')
+  const [agent, setAgent] = useState({ state: 'idle', label: null })
   const [chatOpen, setChatOpen] = useState(() => localStorage.getItem('storm.chat') !== 'closed')
   const apiRef = useRef(null)
   const state = useRef({ text: null, extras: [], placed: [], pending: null, timer: null })
@@ -106,9 +107,10 @@ export default function App() {
     if (!slug) return
     setMissing(false)
     getBoard(slug)
-      .then(({ text, extras, chat }) => {
+      .then(({ text, extras, chat, agent }) => {
         render(text, extras)
         setChat(chat ?? '')
+        setAgent(agent ?? { state: 'idle', label: null })
         setTimeout(() => apiRef.current?.scrollToContent(undefined, { fitToContent: true }), 50)
       })
       .catch(() => { setMissing(true); setBoard(null) })
@@ -125,6 +127,8 @@ export default function App() {
     else render(msg.text)
   }, (msg) => {
     if (msg.slug === slugFromHash()) setChat(msg.chat)
+  }, (msg) => {
+    if (msg.slug === slugFromHash()) setAgent({ state: msg.state, label: msg.label })
   }), [render])
 
   const toggleChat = (open) => {
@@ -141,6 +145,7 @@ export default function App() {
     api.scrollToContent(el, { animate: true })
   }, [])
 
+  const onSay = (text) => say(slugFromHash(), text).then((r) => setChat(r.chat)).catch(() => {})
   const onAnswer = (id, option) => answer(slugFromHash(), id, option).then((r) => setChat(r.chat)).catch(() => {})
   const waiting = pendingQuestions(chat)
 
@@ -168,7 +173,7 @@ export default function App() {
           <button className="tool" onClick={() => state.current.text !== null && render(state.current.text)}>Выровнять заново</button>
           {!chatOpen && (
             <button className="tool" onClick={() => toggleChat(true)}>
-              Комментарии{waiting > 0 && <span className="badge">{waiting}</span>}
+              Агент{waiting > 0 && <span className="badge">{waiting}</span>}
             </button>
           )}
         </div>
@@ -177,6 +182,7 @@ export default function App() {
             <b>Шаг {board.phase}/{PHASES.length} · {phase.title}</b>
             <span className="hint">{phase.hint}</span>
             <span className="dots">{PHASES.map((_, i) => (i < board.phase ? '●' : '○')).join('')}</span>
+            <button className="done" disabled={agent.state === 'thinking'} onClick={() => onSay(`Шаг ${board.phase} «${phase.title}» готов, переходим дальше`)}>Готово ›</button>
           </div>
         )}
         <div className="work">
@@ -197,7 +203,7 @@ export default function App() {
           )}
         </div>
         {chatOpen && !missing && (
-          <ChatPanel chat={chat} onAnswer={onAnswer} onShow={showSticker} onClose={() => toggleChat(false)} />
+          <ChatPanel chat={chat} agent={agent} onAnswer={onAnswer} onShow={showSticker} onSay={onSay} onClose={() => toggleChat(false)} />
         )}
         </div>
       </main>

@@ -37,3 +37,14 @@ html, body, #root { margin: 0; height: 100%; font-family: -apple-system, system-
 .chat .opts button.chosen { background: #1c7ed6; color: #fff; opacity: 1; }
 .chat footer { padding: 8px 12px; font-size: 12px; color: #868e96; border-top: 1px solid #e9ecef; }
 .bar .tool .badge { background: #fa5252; color: #fff; border-radius: 8px; padding: 0 6px; margin-left: 4px; font-size: 11px; }
+.chat header { gap: 8px; }
+.chat .dot { width: 8px; height: 8px; border-radius: 50%; background: #40c057; }
+.chat .dot.busy { background: #fab005; animation: pulse 1s infinite; }
+.chat .status { color: #868e96; font-size: 12px; margin-left: auto; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat header .close { margin-left: 4px; }
+.chat .typing { color: #868e96; font-style: italic; }
+.chat .say { border-top: 1px solid #e9ecef; padding: 8px; }
+.chat .say textarea { width: 100%; box-sizing: border-box; resize: none; border: 1px solid #ced4da; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 14px; }
+.phase .done { border: 1px solid #f08c00; background: #fff; color: #e8590c; border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+.phase .done:disabled { opacity: .5; cursor: default; }
+@keyframes pulse { 50% { opacity: .3; } }

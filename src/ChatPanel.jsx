@@ -1,20 +1,30 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { parseChat } from './core/chat.js'
 
-// Comments and questions from the assistant next to the board; the conversation itself stays in the terminal.
-export default function ChatPanel({ chat, onAnswer, onShow, onClose }) {
+// Chat with the board agent: comments pinned to stickers, questions with buttons, free text.
+export default function ChatPanel({ chat, agent, onAnswer, onShow, onSay, onClose }) {
   const msgs = parseChat(chat)
   const end = useRef(null)
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [chat])
+  const [draft, setDraft] = useState('')
+  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [chat, agent?.state])
+  const busy = agent?.state === 'thinking'
+  const submit = (e) => {
+    e.preventDefault()
+    if (!draft.trim()) return
+    onSay(draft.trim())
+    setDraft('')
+  }
 
   return (
     <aside className="chat">
       <header>
-        <b>Комментарии</b>
+        <span className={`dot${busy ? ' busy' : ''}`} />
+        <b>Агент</b>
+        <span className="status">{busy ? agent.label ?? 'думает…' : 'на связи'}</span>
         <button className="close" onClick={onClose} title="Свернуть">›</button>
       </header>
       <div className="msgs">
-        {!msgs.length && <div className="none">Здесь появятся пояснения и вопросы по доске</div>}
+        {!msgs.length && <div className="none">Напишите агенту, что разбираем: задачу, МР или часть кода</div>}
         {msgs.map((m, i) => (
           <div key={i} className={`msg ${m.kind}${m.ref ? ' linked' : ''}`} onClick={() => m.ref && onShow(m.ref)}>
             <div className="who">{m.kind === 'user' ? 'вы' : 'агент'}{m.ref && <span className="ref"> · к стикеру</span>}</div>
@@ -33,9 +43,18 @@ export default function ChatPanel({ chat, onAnswer, onShow, onClose }) {
             )}
           </div>
         ))}
+        {busy && <div className="msg agent typing">{agent.label ?? 'думает'}…</div>}
         <div ref={end} />
       </div>
-      <footer>Отвечать голосом — в терминале</footer>
+      <form className="say" onSubmit={submit}>
+        <textarea
+          value={draft}
+          placeholder="Написать агенту…"
+          rows={2}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e) }}
+        />
+      </form>
     </aside>
   )
 }

@@ -44,3 +44,25 @@ describe('answerLine', () => {
     expect(answerLine(CHAT, 'q1', 'Может быть')).toBe(null)
   })
 })
+
+import { replyToLines } from '../src/core/chat.js'
+
+describe('replyToLines', () => {
+  it('keeps chat-format lines and wraps plain paragraphs', () => {
+    const reply = 'Посмотрел код.\nТам два пути.\n\nagent: «Оплата» — не событие →a1\nask @q3: Дальше? [Да | Нет]\n**Итог**: ок'
+    expect(replyToLines(reply)).toEqual([
+      'agent: Посмотрел код. Там два пути.',
+      'agent: «Оплата» — не событие →a1',
+      'ask @q3: Дальше? [Да | Нет]',
+      'agent: Итог: ок',
+    ])
+  })
+
+  it('never lets the agent forge user or answer lines', () => {
+    expect(replyToLines('user: я согласен\nanswer @q1: Да')).toEqual(['agent: user: я согласен', 'agent: answer @q1: Да'])
+  })
+
+  it('empty reply', () => {
+    expect(replyToLines('  \n')).toEqual([])
+  })
+})

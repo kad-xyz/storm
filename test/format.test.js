@@ -110,3 +110,10 @@ describe('applyOps', () => {
     expect(applyOps(AUTH, [{ op: 'edit', id: 'nope', text: 'x' }]).text).toBe(AUTH)
   })
 })
+
+describe('header meta', () => {
+  it('parses key: value header lines', () => {
+    const b = parse('# T\nsource: MR !1\nrepo: ~/code/app\nmodel: haiku\n## flow\nevent A')
+    expect(b.meta).toEqual({ source: 'MR !1', repo: '~/code/app', model: 'haiku' })
+  })
+})

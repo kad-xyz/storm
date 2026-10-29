@@ -2,13 +2,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse, applyOps } from '../src/core/format.js'
-import { answerLine } from '../src/core/chat.js'
+import { answerLine, parseChat } from '../src/core/chat.js'
+import { createAgents } from './agent.js'
+import { runClaude } from './claude.js'
 
 const SLUG_RE = /^[\p{L}\p{N}_-][\p{L}\p{N}_.-]*$/u
 const CHAT = '.chat.md'
 const isBoardFile = (n) => n.endsWith('.md') && !n.endsWith(CHAT)
 
-export function createStorm({ boardsDir }) {
+export function createStorm({ boardsDir, runAgent = runClaude }) {
   fs.mkdirSync(boardsDir, { recursive: true })
   const clients = new Set()
   const knownChat = new Map() // slug -> last chat text seen or written
@@ -67,6 +69,19 @@ export function createStorm({ boardsDir }) {
   const readChat = (slug) => {
     try { return fs.readFileSync(file(slug, CHAT), 'utf8') } catch { return '' }
   }
+  const appendChat = (slug, lines) => {
+    if (!lines.length) return readChat(slug)
+    const chat = readChat(slug)
+    const next = chat + (chat && !chat.endsWith('\n') ? '\n' : '') + lines.join('\n') + '\n'
+    fs.writeFileSync(file(slug, CHAT), next)
+    knownChat.set(slug, next)
+    broadcast({ slug, chat: next }, 'chat')
+    return next
+  }
+  const agents = createAgents({
+    boardsDir, runAgent, appendChat, readChat,
+    onState: (slug, s) => broadcast({ slug, ...s }, 'agent'),
+  })
   const readExtras = (slug) => {
     try { return JSON.parse(fs.readFileSync(file(slug, '.layout.json'), 'utf8')).extras ?? [] } catch { return [] }
   }
@@ -95,14 +110,16 @@ export function createStorm({ boardsDir }) {
         })
         return json(res, 200, list)
       }
-      const m = /^\/api\/boards\/([^/]+)(?:\/(ops|extras|answer))?$/.exec(url.pathname)
+      const m = /^\/api\/boards\/([^/]+)(?:\/(ops|extras|answer|say))?$/.exec(url.pathname)
       if (!m) return json(res, 404, { error: 'not found' })
       const slug = decodeURIComponent(m[1])
       if (!SLUG_RE.test(slug) || slug.includes('..') || slug.endsWith('.chat')) return json(res, 400, { error: 'bad slug' })
       if (!fs.existsSync(file(slug))) return json(res, 404, { error: 'board not found' })
 
       if (!m[2] && req.method === 'GET') {
-        return json(res, 200, { text: fs.readFileSync(file(slug), 'utf8'), extras: readExtras(slug), chat: readChat(slug) })
+        return json(res, 200, {
+          text: fs.readFileSync(file(slug), 'utf8'), extras: readExtras(slug), chat: readChat(slug), agent: agents.state(slug),
+        })
       }
       if (m[2] === 'ops' && req.method === 'POST') {
         const { ops = [], clientId = 'page', base } = await readBody(req)
@@ -120,10 +137,17 @@ export function createStorm({ boardsDir }) {
         const chat = readChat(slug)
         const line = answerLine(chat, id, option)
         if (!line) return json(res, 400, { error: 'no such question or option' })
-        const next = chat + (chat && !chat.endsWith('\n') ? '\n' : '') + line + '\n'
-        fs.writeFileSync(file(slug, CHAT), next)
-        knownChat.set(slug, next)
-        broadcast({ slug, chat: next }, 'chat')
+        const next = appendChat(slug, [line])
+        const ask = parseChat(chat).find((q) => q.kind === 'ask' && q.id === id)
+        agents.say(slug, `Ответ кнопкой на вопрос «${ask.text}»: ${option}`)
+        return json(res, 200, { chat: next })
+      }
+      if (m[2] === 'say' && req.method === 'POST') {
+        const { text } = await readBody(req)
+        const msg = String(text ?? '').replace(/\s+/g, ' ').trim()
+        if (!msg) return json(res, 400, { error: 'empty message' })
+        const next = appendChat(slug, [`user: ${msg}`])
+        agents.say(slug, msg)
         return json(res, 200, { chat: next })
       }
       if (m[2] === 'extras' && req.method === 'PUT') {
@@ -139,6 +163,7 @@ export function createStorm({ boardsDir }) {
 
   return {
     middleware,
+    agentState: agents.state,
     close() {
       watcher.close()
       timers.forEach(clearTimeout)

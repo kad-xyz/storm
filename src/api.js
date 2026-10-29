@@ -14,9 +14,12 @@ export const putExtras = (slug, extras) => send('PUT', `/api/boards/${encodeURIC
 
 export const answer = (slug, id, option) => send('POST', `/api/boards/${encodeURIComponent(slug)}/answer`, { id, option })
 
-export function subscribe(onBoard, onChat) {
+export const say = (slug, text) => send('POST', `/api/boards/${encodeURIComponent(slug)}/say`, { text })
+
+export function subscribe(onBoard, onChat, onAgent) {
   const es = new EventSource('/api/events')
   es.addEventListener('board', (e) => onBoard(JSON.parse(e.data)))
   es.addEventListener('chat', (e) => onChat(JSON.parse(e.data)))
+  es.addEventListener('agent', (e) => onAgent(JSON.parse(e.data)))
   return () => es.close()
 }
