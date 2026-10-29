@@ -1,0 +1,20 @@
+html, body, #root { margin: 0; height: 100%; font-family: -apple-system, system-ui, sans-serif; }
+.app { display: grid; grid-template-columns: 200px 1fr; height: 100%; }
+.side { border-right: 1px solid #e9ecef; padding: 12px; overflow: auto; background: #fafafa; }
+.side h1 { font-size: 15px; margin: 0 0 12px; }
+.side a { display: block; padding: 6px 8px; border-radius: 6px; color: #212529; text-decoration: none; font-size: 14px; }
+.side a.on { background: #e7f5ff; font-weight: 600; }
+.main { display: flex; flex-direction: column; min-width: 0; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #e9ecef; flex-wrap: wrap; }
+.bar .title { font-weight: 600; }
+.legend { display: flex; gap: 6px; flex-wrap: wrap; }
+.legend button { border: 1px solid #adb5bd; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+.legend kbd { opacity: .6; margin-right: 4px; }
+.bar .spacer { flex: 1; }
+.bar .tool { border: 1px solid #ced4da; background: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.phase { padding: 6px 12px; background: #fff9db; border-bottom: 1px solid #ffe8a1; font-size: 14px; display: flex; gap: 12px; align-items: center; }
+.phase b { white-space: nowrap; }
+.phase .hint { color: #5c5f66; }
+.phase .dots { margin-left: auto; letter-spacing: 3px; color: #f08c00; white-space: nowrap; }
+.canvas { flex: 1; min-height: 0; position: relative; }
+.empty { padding: 40px; color: #868e96; }
