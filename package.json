@@ -18,5 +18,23 @@
     "@vitejs/plugin-react": "^6.1.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
+  },
+  "author": "Daniil Kulikov",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kad-xyz/storm.git"
+  },
+  "homepage": "https://github.com/kad-xyz/storm#readme",
+  "bugs": {
+    "url": "https://github.com/kad-xyz/storm/issues"
+  },
+  "keywords": [
+    "event-storming",
+    "excalidraw",
+    "ddd",
+    "whiteboard"
+  ],
+  "engines": {
+    "node": ">=20.19"
   }
 }
