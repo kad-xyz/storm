@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import http from 'node:http'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -8,19 +8,26 @@ import { AUTH } from './fixtures.js'
 
 let dir, server, storm, base
 
-beforeEach(async () => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'storm-'))
-  fs.writeFileSync(path.join(dir, 'auth.md'), AUTH)
-  storm = createStorm({ boardsDir: dir })
+// One HTTP server for the file: a fresh port per test lets fetch reuse a stale keep-alive socket.
+beforeAll(async () => {
   server = http.createServer((req, res) => storm.middleware(req, res, () => { res.statusCode = 404; res.end() }))
   await new Promise((r) => server.listen(0, r))
   base = `http://127.0.0.1:${server.address().port}`
 })
 
-afterEach(async () => {
-  storm.close()
+afterAll(async () => {
   server.closeAllConnections()
   await new Promise((r) => server.close(r))
+})
+
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'storm-'))
+  fs.writeFileSync(path.join(dir, 'auth.md'), AUTH)
+  storm = createStorm({ boardsDir: dir })
+})
+
+afterEach(() => {
+  storm.close()
   fs.rmSync(dir, { recursive: true, force: true })
 })
 

@@ -1,8 +1,7 @@
 // Placed stickers -> Excalidraw elements with stable ids.
 import { convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import { STICKERS, ATTACHED_COLOR } from './stickers.js'
-
-export const elementId = (key) => `st-${key}`
+import { elementId } from './ids.js'
 
 export function toElements(placed) {
   const skeletons = placed.map((p) => ({

@@ -5,7 +5,9 @@ import { layout } from './core/layout.js'
 import { toElements } from './scene.js'
 import { PHASES } from './phases.js'
 import { STICKERS } from './stickers.js'
-import { clientId, getBoard, listBoards, subscribe } from './api.js'
+import { clientId, getBoard, listBoards, postOps, putExtras, subscribe } from './api.js'
+import { sceneToOps } from './diff.js'
+import { dropTarget } from './core/layout.js'
 
 const slugFromHash = () => decodeURIComponent(location.hash.replace(/^#\/?/, ''))
 
@@ -15,18 +17,73 @@ export default function App() {
   const [board, setBoard] = useState(null)
   const [missing, setMissing] = useState(false)
   const apiRef = useRef(null)
-  const state = useRef({ text: null, extras: [], placed: [], pending: null })
+  const state = useRef({ text: null, extras: [], placed: [], pending: null, timer: null })
+  const signature = (els) => els.map((e) => `${e.id}:${e.version}`).join(',')
 
   const render = useCallback((text, extras = state.current.extras) => {
     const parsed = parse(text)
     const placed = layout(parsed)
-    Object.assign(state.current, { text, extras, placed, board: parsed })
+    Object.assign(state.current, { text, extras, placed, board: parsed, extrasSig: signature(extras), pending: null })
     setBoard(parsed)
     apiRef.current?.updateScene({
       elements: [...toElements(placed), ...extras],
       captureUpdate: CaptureUpdateAction.NEVER,
     })
   }, [])
+
+  // Push canvas edits back to the board file once a gesture or text edit is over.
+  const sync = useCallback(async () => {
+    const api = apiRef.current
+    const st = state.current
+    if (!api || st.text === null) return
+    if (api.getAppState().editingTextElement) return
+    const slug = slugFromHash()
+    const { ops, extras, moved } = sceneToOps(st.placed, api.getSceneElements(), st.board)
+    if (signature(extras) !== st.extrasSig) {
+      st.extras = extras
+      st.extrasSig = signature(extras)
+      putExtras(slug, extras).catch(() => {})
+    }
+    if (ops.length) {
+      const res = await postOps(slug, ops)
+      render(res.text)
+    } else if (st.pending !== null) {
+      render(st.pending)
+    } else if (moved) {
+      render(st.text)
+    }
+  }, [render])
+
+  const onChange = useCallback((_, appState) => {
+    clearTimeout(state.current.timer)
+    if (appState.editingTextElement || appState.cursorButton === 'down') return
+    state.current.timer = setTimeout(sync, 300)
+  }, [sync])
+
+  const addSticker = useCallback(async (type) => {
+    const api = apiRef.current
+    const st = state.current
+    if (!api || st.text === null) return
+    const { scrollX, scrollY, zoom, width, height } = api.getAppState()
+    const x = -scrollX + width / 2 / zoom.value
+    const y = -scrollY + height / 2 / zoom.value
+    const res = await postOps(slugFromHash(), [{ op: 'add', type, text: STICKERS[type].placeholder, ...dropTarget(st.board, type, x, y) }])
+    render(res.text)
+  }, [render])
+
+  // Option+1…8 adds a sticker (plain digits are Excalidraw tool shortcuts).
+  useEffect(() => {
+    const types = Object.keys(STICKERS)
+    const onKey = (e) => {
+      const n = /^Digit([1-8])$/.exec(e.code)
+      if (!n || !e.altKey || apiRef.current?.getAppState().editingTextElement) return
+      e.preventDefault()
+      e.stopPropagation()
+      addSticker(types[Number(n[1]) - 1])
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [addSticker])
 
   useEffect(() => {
     const onHash = () => setSlug(slugFromHash())
@@ -56,7 +113,8 @@ export default function App() {
     if (msg.slug !== slugFromHash() || msg.origin === clientId) return
     if (msg.text === null) { setMissing(true); setBoard(null); return }
     setMissing(false)
-    if (apiRef.current?.getAppState().editingTextElement) state.current.pending = msg.text
+    const busy = apiRef.current?.getAppState()
+    if (busy?.editingTextElement || busy?.cursorButton === 'down') state.current.pending = msg.text
     else render(msg.text)
   }), [render])
 
@@ -75,12 +133,13 @@ export default function App() {
           <span className="title">{board?.title || slug}</span>
           <div className="legend">
             {Object.entries(STICKERS).map(([type, s], i) => (
-              <button key={type} data-type={type} style={{ background: s.color }} title={`Добавить: ${s.label}`}>
-                <kbd>{i + 1}</kbd>{s.label}
+              <button key={type} style={{ background: s.color }} title={`Добавить: ${s.label} (⌥${i + 1})`} onClick={() => addSticker(type)}>
+                <kbd>⌥{i + 1}</kbd>{s.label}
               </button>
             ))}
           </div>
           <span className="spacer" />
+          <button className="tool" onClick={() => state.current.text !== null && render(state.current.text)}>Выровнять заново</button>
         </div>
         {phase && (
           <div className="phase">
@@ -99,6 +158,7 @@ export default function App() {
                 if (import.meta.env.DEV) window.storm = { api, state: state.current }
                 if (state.current.text !== null) setTimeout(() => render(state.current.text), 0)
               }}
+              onChange={onChange}
               langCode="ru-RU"
               initialData={{ appState: { viewBackgroundColor: '#ffffff' } }}
             />
