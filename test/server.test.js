@@ -23,7 +23,8 @@ afterAll(async () => {
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'storm-'))
   fs.writeFileSync(path.join(dir, 'auth.md'), AUTH)
-  storm = createStorm({ boardsDir: dir })
+  // Never start a real agent from tests.
+  storm = createStorm({ boardsDir: dir, runAgent: async () => '' })
 })
 
 afterEach(() => {
