@@ -5,7 +5,9 @@ import { layout } from './core/layout.js'
 import { toElements } from './scene.js'
 import { PHASES } from './phases.js'
 import { STICKERS } from './stickers.js'
-import { clientId, getBoard, listBoards, postOps, putExtras, subscribe } from './api.js'
+import { answer, clientId, getBoard, listBoards, postOps, putExtras, subscribe } from './api.js'
+import ChatPanel, { pendingQuestions } from './ChatPanel.jsx'
+import { elementId } from './ids.js'
 import { sceneToOps } from './diff.js'
 import { dropTarget } from './core/layout.js'
 
@@ -16,6 +18,8 @@ export default function App() {
   const [slug, setSlug] = useState(slugFromHash)
   const [board, setBoard] = useState(null)
   const [missing, setMissing] = useState(false)
+  const [chat, setChat] = useState('')
+  const [chatOpen, setChatOpen] = useState(() => localStorage.getItem('storm.chat') !== 'closed')
   const apiRef = useRef(null)
   const state = useRef({ text: null, extras: [], placed: [], pending: null, timer: null })
   const signature = (els) => els.map((e) => `${e.id}:${e.version}`).join(',')
@@ -38,7 +42,7 @@ export default function App() {
     if (!api || st.text === null) return
     if (api.getAppState().editingTextElement) return
     const slug = slugFromHash()
-    const { ops, extras, moved } = sceneToOps(st.placed, api.getSceneElements(), st.board)
+    const { ops, extras, moved } = sceneToOps(st.placed, api.getSceneElementsIncludingDeleted(), st.board)
     if (signature(extras) !== st.extrasSig) {
       st.extras = extras
       st.extrasSig = signature(extras)
@@ -102,8 +106,9 @@ export default function App() {
     if (!slug) return
     setMissing(false)
     getBoard(slug)
-      .then(({ text, extras }) => {
+      .then(({ text, extras, chat }) => {
         render(text, extras)
+        setChat(chat ?? '')
         setTimeout(() => apiRef.current?.scrollToContent(undefined, { fitToContent: true }), 50)
       })
       .catch(() => { setMissing(true); setBoard(null) })
@@ -118,7 +123,26 @@ export default function App() {
     // While typing, dragging or with an edit not yet sent, the incoming text waits for sync().
     if (busy?.editingTextElement || busy?.cursorButton === 'down' || state.current.timer) state.current.pending = msg.text
     else render(msg.text)
+  }, (msg) => {
+    if (msg.slug === slugFromHash()) setChat(msg.chat)
   }), [render])
+
+  const toggleChat = (open) => {
+    setChatOpen(open)
+    localStorage.setItem('storm.chat', open ? 'open' : 'closed')
+  }
+
+  // Select and centre the sticker a comment is about.
+  const showSticker = useCallback((ref) => {
+    const api = apiRef.current
+    const el = api?.getSceneElements().find((e) => e.id === elementId(ref))
+    if (!el) return
+    api.updateScene({ appState: { selectedElementIds: { [el.id]: true } }, captureUpdate: CaptureUpdateAction.NEVER })
+    api.scrollToContent(el, { animate: true })
+  }, [])
+
+  const onAnswer = (id, option) => answer(slugFromHash(), id, option).then((r) => setChat(r.chat)).catch(() => {})
+  const waiting = pendingQuestions(chat)
 
   const phase = board?.phase && PHASES[board.phase - 1]
 
@@ -142,6 +166,11 @@ export default function App() {
           </div>
           <span className="spacer" />
           <button className="tool" onClick={() => state.current.text !== null && render(state.current.text)}>Выровнять заново</button>
+          {!chatOpen && (
+            <button className="tool" onClick={() => toggleChat(true)}>
+              Комментарии{waiting > 0 && <span className="badge">{waiting}</span>}
+            </button>
+          )}
         </div>
         {phase && (
           <div className="phase">
@@ -150,6 +179,7 @@ export default function App() {
             <span className="dots">{PHASES.map((_, i) => (i < board.phase ? '●' : '○')).join('')}</span>
           </div>
         )}
+        <div className="work">
         <div className="canvas">
           {missing ? (
             <div className="empty">Доска «{slug}» не найдена</div>
@@ -165,6 +195,10 @@ export default function App() {
               initialData={{ appState: { viewBackgroundColor: '#ffffff' } }}
             />
           )}
+        </div>
+        {chatOpen && !missing && (
+          <ChatPanel chat={chat} onAnswer={onAnswer} onShow={showSticker} onClose={() => toggleChat(false)} />
+        )}
         </div>
       </main>
     </div>

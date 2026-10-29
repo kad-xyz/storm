@@ -48,7 +48,8 @@ function sse() {
           while ((i = buf.indexOf('\n\n')) >= 0) {
             const chunk = buf.slice(0, i); buf = buf.slice(i + 2)
             const data = chunk.split('\n').find((l) => l.startsWith('data: '))
-            if (data && chunk.includes('event: board')) events.push(JSON.parse(data.slice(6)))
+            const type = chunk.split('\n').find((l) => l.startsWith('event: '))?.slice(7)
+            if (data && type) events.push({ type, ...JSON.parse(data.slice(6)) })
           }
         }
       } catch {}
@@ -67,7 +68,7 @@ describe('storm api', () => {
 
   it('gets a board with extras', async () => {
     const res = await fetch(`${base}/api/boards/auth`)
-    expect(await res.json()).toEqual({ text: AUTH, extras: [] })
+    expect(await res.json()).toEqual({ text: AUTH, extras: [], chat: '' })
   })
 
   it('ops patch file on disk', async () => {
@@ -148,5 +149,44 @@ describe('storm api hardening', () => {
     const { text } = await res.json()
     expect(text).toContain('actor Новый')
     expect(text).toMatch(/command Войти +@s1/)
+  })
+})
+
+describe('storm chat', () => {
+  const post = (url, body) => fetch(`${base}${url}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  })
+
+  it('chat file is not listed as a board', async () => {
+    fs.writeFileSync(path.join(dir, 'auth.chat.md'), 'agent: привет\n')
+    expect((await (await fetch(`${base}/api/boards`)).json()).map((b) => b.slug)).toEqual(['auth'])
+    expect((await fetch(`${base}/api/boards/auth.chat`)).status).toBe(400)
+  })
+
+  it('board comes with its chat', async () => {
+    fs.writeFileSync(path.join(dir, 'auth.chat.md'), 'agent: привет\n')
+    expect((await (await fetch(`${base}/api/boards/auth`)).json()).chat).toBe('agent: привет\n')
+  })
+
+  it('answer appends a line to the chat file', async () => {
+    fs.writeFileSync(path.join(dir, 'auth.chat.md'), 'ask @q1: Дальше? [Да | Нет]')
+    const res = await post('/api/boards/auth/answer', { id: 'q1', option: 'Да' })
+    expect(res.status).toBe(200)
+    expect(fs.readFileSync(path.join(dir, 'auth.chat.md'), 'utf8')).toBe('ask @q1: Дальше? [Да | Нет]\nanswer @q1: Да\n')
+  })
+
+  it('answer to unknown option is rejected', async () => {
+    fs.writeFileSync(path.join(dir, 'auth.chat.md'), 'ask @q1: Дальше? [Да | Нет]\n')
+    expect((await post('/api/boards/auth/answer', { id: 'q1', option: 'Может' })).status).toBe(400)
+  })
+
+  it('external chat edit emits chat event, not board', async () => {
+    const s = sse(); await s.ready; await wait(100)
+    fs.writeFileSync(path.join(dir, 'auth.chat.md'), 'agent: новое\n')
+    const t0 = Date.now()
+    while (!s.events.length && Date.now() - t0 < 1000) await wait(20)
+    await wait(150)
+    s.stop()
+    expect(s.events).toEqual([{ type: 'chat', slug: 'auth', chat: 'agent: новое\n' }])
   })
 })

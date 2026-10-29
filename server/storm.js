@@ -2,30 +2,45 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse, applyOps } from '../src/core/format.js'
+import { answerLine } from '../src/core/chat.js'
 
 const SLUG_RE = /^[\p{L}\p{N}_-][\p{L}\p{N}_.-]*$/u
+const CHAT = '.chat.md'
+const isBoardFile = (n) => n.endsWith('.md') && !n.endsWith(CHAT)
 
 export function createStorm({ boardsDir }) {
   fs.mkdirSync(boardsDir, { recursive: true })
   const clients = new Set()
+  const knownChat = new Map() // slug -> last chat text seen or written
   const known = new Map() // slug -> last text seen or written; changes are broadcast only when it differs
   const timers = new Map()
 
   const file = (slug, ext = '.md') => path.join(boardsDir, slug + ext)
   for (const n of fs.readdirSync(boardsDir)) {
-    if (n.endsWith('.md')) known.set(n.slice(0, -3), fs.readFileSync(path.join(boardsDir, n), 'utf8'))
+    if (isBoardFile(n)) known.set(n.slice(0, -3), fs.readFileSync(path.join(boardsDir, n), 'utf8'))
+    else if (n.endsWith(CHAT)) knownChat.set(n.slice(0, -CHAT.length), fs.readFileSync(path.join(boardsDir, n), 'utf8'))
   }
-  const broadcast = (payload) => {
-    const msg = `event: board\ndata: ${JSON.stringify(payload)}\n\n`
+  const broadcast = (payload, type = 'board') => {
+    const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`
     clients.forEach((res) => res.write(msg))
   }
 
   const watcher = fs.watch(boardsDir, (_, name) => {
     if (!name || !name.endsWith('.md')) return
-    const slug = name.slice(0, -3)
-    clearTimeout(timers.get(slug))
-    timers.set(slug, setTimeout(() => {
-      timers.delete(slug)
+    const isChat = name.endsWith(CHAT)
+    const slug = name.slice(0, isChat ? -CHAT.length : -3)
+    const timerKey = name
+    clearTimeout(timers.get(timerKey))
+    timers.set(timerKey, setTimeout(() => {
+      timers.delete(timerKey)
+      if (isChat) {
+        const chat = readChat(slug)
+        if (chat !== knownChat.get(slug)) {
+          knownChat.set(slug, chat)
+          broadcast({ slug, chat }, 'chat')
+        }
+        return
+      }
       let text
       try { text = fs.readFileSync(file(slug), 'utf8') } catch { text = null }
       if (text === (known.get(slug) ?? null)) return
@@ -49,6 +64,9 @@ export function createStorm({ boardsDir }) {
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')) } catch (e) { reject(e) } })
     req.on('error', reject)
   })
+  const readChat = (slug) => {
+    try { return fs.readFileSync(file(slug, CHAT), 'utf8') } catch { return '' }
+  }
   const readExtras = (slug) => {
     try { return JSON.parse(fs.readFileSync(file(slug, '.layout.json'), 'utf8')).extras ?? [] } catch { return [] }
   }
@@ -71,20 +89,20 @@ export function createStorm({ boardsDir }) {
         return
       }
       if (url.pathname === '/api/boards' && req.method === 'GET') {
-        const list = fs.readdirSync(boardsDir).filter((n) => n.endsWith('.md')).sort().map((n) => {
+        const list = fs.readdirSync(boardsDir).filter(isBoardFile).sort().map((n) => {
           const slug = n.slice(0, -3)
           return { slug, title: parse(fs.readFileSync(file(slug), 'utf8')).title || slug }
         })
         return json(res, 200, list)
       }
-      const m = /^\/api\/boards\/([^/]+)(?:\/(ops|extras))?$/.exec(url.pathname)
+      const m = /^\/api\/boards\/([^/]+)(?:\/(ops|extras|answer))?$/.exec(url.pathname)
       if (!m) return json(res, 404, { error: 'not found' })
       const slug = decodeURIComponent(m[1])
-      if (!SLUG_RE.test(slug) || slug.includes('..')) return json(res, 400, { error: 'bad slug' })
+      if (!SLUG_RE.test(slug) || slug.includes('..') || slug.endsWith('.chat')) return json(res, 400, { error: 'bad slug' })
       if (!fs.existsSync(file(slug))) return json(res, 404, { error: 'board not found' })
 
       if (!m[2] && req.method === 'GET') {
-        return json(res, 200, { text: fs.readFileSync(file(slug), 'utf8'), extras: readExtras(slug) })
+        return json(res, 200, { text: fs.readFileSync(file(slug), 'utf8'), extras: readExtras(slug), chat: readChat(slug) })
       }
       if (m[2] === 'ops' && req.method === 'POST') {
         const { ops = [], clientId = 'page', base } = await readBody(req)
@@ -96,6 +114,17 @@ export function createStorm({ boardsDir }) {
           broadcast({ slug, text, origin: clientId })
         }
         return json(res, 200, { text, assigned })
+      }
+      if (m[2] === 'answer' && req.method === 'POST') {
+        const { id, option } = await readBody(req)
+        const chat = readChat(slug)
+        const line = answerLine(chat, id, option)
+        if (!line) return json(res, 400, { error: 'no such question or option' })
+        const next = chat + (chat && !chat.endsWith('\n') ? '\n' : '') + line + '\n'
+        fs.writeFileSync(file(slug, CHAT), next)
+        knownChat.set(slug, next)
+        broadcast({ slug, chat: next }, 'chat')
+        return json(res, 200, { chat: next })
       }
       if (m[2] === 'extras' && req.method === 'PUT') {
         const { extras = [] } = await readBody(req)

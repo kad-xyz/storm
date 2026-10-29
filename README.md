@@ -66,6 +66,19 @@ Rules:
 - `phase: 1–6` shows the step strip: Brainstorm → Order → Key events → Commands & actors → Policies & systems → Hot spots.
 - Hand-drawn arrows, frames and free text are kept in `boards/<slug>.layout.json`.
 
+## Comments panel
+
+`boards/<slug>.chat.md` is shown in a panel next to the board, one message per line:
+
+```
+agent: Two code paths here: webhook and polling →a1
+ask @q1: Timeline done, move on? [Yes | A few more minutes | No]
+user: check the payment part
+```
+
+`→id` links a comment to a sticker (click it to select the sticker). Pressing an answer button appends
+`answer @q1: Yes` to the file.
+
 ## On the canvas
 
 - **Option+1…8** or the legend buttons add a sticker; double-click to edit its text.

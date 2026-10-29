@@ -12,8 +12,11 @@ export const getBoard = (slug) => fetch(`/api/boards/${encodeURIComponent(slug)}
 export const postOps = (slug, ops, base) => send('POST', `/api/boards/${encodeURIComponent(slug)}/ops`, { ops, base, clientId })
 export const putExtras = (slug, extras) => send('PUT', `/api/boards/${encodeURIComponent(slug)}/extras`, { extras })
 
-export function subscribe(onBoard) {
+export const answer = (slug, id, option) => send('POST', `/api/boards/${encodeURIComponent(slug)}/answer`, { id, option })
+
+export function subscribe(onBoard, onChat) {
   const es = new EventSource('/api/events')
   es.addEventListener('board', (e) => onBoard(JSON.parse(e.data)))
+  es.addEventListener('chat', (e) => onChat(JSON.parse(e.data)))
   return () => es.close()
 }
