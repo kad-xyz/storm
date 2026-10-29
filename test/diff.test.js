@@ -45,6 +45,12 @@ describe('sceneToOps', () => {
     expect(sceneToOps(placed, els, board)).toEqual({ ops: [], extras: [], moved: false })
   })
 
+  it('sticker missing from the scene (canvas reset) → no delete', () => {
+    const els = scene(placed).filter((e) => e.id !== 'st-h1' && e.id !== 'st-h1-t')
+    expect(sceneToOps(placed, els, board).ops).toEqual([])
+    expect(sceneToOps(placed, [], board).ops).toEqual([])
+  })
+
   it('deleted sticker → delete', () => {
     const els = scene(placed)
     el(els, 'st-h1').isDeleted = true

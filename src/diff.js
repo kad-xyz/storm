@@ -1,4 +1,5 @@
 // Canvas changes -> board ops. Stickers are matched by customData.stormId.
+// `elements` must include deleted ones (getSceneElementsIncludingDeleted).
 import { dropTarget } from './core/layout.js'
 import { elementId } from './ids.js'
 
@@ -13,9 +14,15 @@ export function sceneToOps(prevPlaced, elements, board) {
   const ops = []
   let moved = false
 
+  // Only an element the user deleted means delete; one that is simply absent (canvas reset) means redraw.
+  const deleted = new Set(elements.filter((e) => e.isDeleted).map((e) => e.id))
   for (const p of prevPlaced) {
     const el = stickers.find((e) => e.id === elementId(p.key))
-    if (!el) { ops.push({ op: 'delete', id: p.key }); continue }
+    if (!el) {
+      if (deleted.has(elementId(p.key))) ops.push({ op: 'delete', id: p.key })
+      else moved = true
+      continue
+    }
     const text = labelOf.get(el.id)
     if (text && text !== clean(p.text)) ops.push({ op: 'edit', id: p.key, text })
     if (Math.abs(el.x - p.x) > JITTER || Math.abs(el.y - p.y) > JITTER) {
