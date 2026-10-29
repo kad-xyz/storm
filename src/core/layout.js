@@ -48,9 +48,12 @@ function geometry(board) {
 }
 
 function attached(board) {
-  const all = new Set(board.flows.flatMap((f) => f.items.map(key)))
   const out = new Set()
-  board.flows.forEach((f) => f.items.forEach((i) => i.type === 'hot' && i.ref && all.has(i.ref) && out.add(key(i))))
+  const types = new Map(board.flows.flatMap((f) => f.items.map((i) => [key(i), i.type])))
+  // A question pins under a regular sticker only; one pointing at a question (or itself) is drawn in its lane.
+  board.flows.forEach((f) => f.items.forEach((i) => {
+    if (i.type === 'hot' && i.ref && types.has(i.ref) && types.get(i.ref) !== 'hot') out.add(key(i))
+  }))
   return out
 }
 
@@ -97,5 +100,7 @@ export function dropTarget(board, type, x, y) {
   const { cols, offset } = geo[f]
   if (!cols.length) return { flow: f, column: 0 }
   const col = Math.round(x / COL_W) - offset
-  return { flow: f, column: Math.min(Math.max(0, col), cols.length - 1) }
+  // An event dropped right of the last column extends the timeline.
+  const last = type === 'event' ? cols.length : cols.length - 1
+  return { flow: f, column: Math.min(Math.max(0, col), last) }
 }

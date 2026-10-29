@@ -45,8 +45,8 @@ export default function App() {
       putExtras(slug, extras).catch(() => {})
     }
     if (ops.length) {
-      const res = await postOps(slug, ops)
-      render(res.text)
+      const res = await postOps(slug, ops, st.text).catch(() => null)
+      render(res ? res.text : st.pending ?? st.text)
     } else if (st.pending !== null) {
       render(st.pending)
     } else if (moved) {
@@ -56,8 +56,9 @@ export default function App() {
 
   const onChange = useCallback((_, appState) => {
     clearTimeout(state.current.timer)
+    state.current.timer = null
     if (appState.editingTextElement || appState.cursorButton === 'down') return
-    state.current.timer = setTimeout(sync, 300)
+    state.current.timer = setTimeout(() => { state.current.timer = null; sync() }, 300)
   }, [sync])
 
   const addSticker = useCallback(async (type) => {
@@ -67,8 +68,8 @@ export default function App() {
     const { scrollX, scrollY, zoom, width, height } = api.getAppState()
     const x = -scrollX + width / 2 / zoom.value
     const y = -scrollY + height / 2 / zoom.value
-    const res = await postOps(slugFromHash(), [{ op: 'add', type, text: STICKERS[type].placeholder, ...dropTarget(st.board, type, x, y) }])
-    render(res.text)
+    const res = await postOps(slugFromHash(), [{ op: 'add', type, text: STICKERS[type].placeholder, ...dropTarget(st.board, type, x, y) }], st.text).catch(() => null)
+    if (res) render(res.text)
   }, [render])
 
   // Option+1…8 adds a sticker (plain digits are Excalidraw tool shortcuts).
@@ -114,7 +115,8 @@ export default function App() {
     if (msg.text === null) { setMissing(true); setBoard(null); return }
     setMissing(false)
     const busy = apiRef.current?.getAppState()
-    if (busy?.editingTextElement || busy?.cursorButton === 'down') state.current.pending = msg.text
+    // While typing, dragging or with an edit not yet sent, the incoming text waits for sync().
+    if (busy?.editingTextElement || busy?.cursorButton === 'down' || state.current.timer) state.current.pending = msg.text
     else render(msg.text)
   }), [render])
 

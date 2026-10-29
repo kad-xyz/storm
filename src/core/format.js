@@ -30,18 +30,20 @@ export function parse(text) {
       board.flows.push(flow)
       return
     }
-    if (!flow) {
+    if (!flow || !hasFlows) {
       const title = /^#\s+(.+)$/.exec(line)
       if (title && !board.title) board.title = title[1].trim()
       const phase = /^phase:\s*(\d+)\s*$/.exec(line)
       if (phase) board.phase = Number(phase[1])
-      return
+      if (title || phase || !flow) return
     }
     const item = parseItem(line, i)
     if (item) flow.items.push(item)
   })
   return board
 }
+
+export const isLineKey = (k) => /^L\d+$/.test(k ?? '')
 
 export function key(item) {
   return item.id ?? `L${item.line}`
@@ -77,7 +79,7 @@ export function newId(board, taken = new Set()) {
 
 function findItem(board, id) {
   for (let f = 0; f < board.flows.length; f++) {
-    const item = board.flows[f].items.find((i) => key(i) === id)
+    const item = board.flows[f].items.find((i) => (i.id ? i.id === id : isLineKey(id) && `L${i.line}` === id))
     if (item) return { item, flow: f }
   }
   return null
@@ -111,8 +113,10 @@ function insertionLine(board, f, type, column) {
   const flow = board.flows[f]
   const ranges = columnRanges(board, f)
   if (!ranges.length) {
-    const base = flow.headerLine ?? -1
-    return base + 1
+    if (flow.headerLine !== null) return flow.headerLine + 1
+    let at = board.lines.length
+    while (at > 0 && board.lines[at - 1] === '') at--
+    return at
   }
   if (type === 'event') {
     if (column >= ranges.length) return ranges[ranges.length - 1].end
@@ -203,14 +207,39 @@ function applyOne(text, op, assigned) {
   return text
 }
 
-export function applyOps(text, ops) {
+// Line keys computed against `base` -> line keys of the same stickers in `text` (matched by type, text
+// and occurrence). Ops whose sticker is gone are dropped.
+function rebase(ops, base, text) {
+  const sig = (i) => `${i.type}\u0000${i.text}`
+  const index = (board) => {
+    const seen = {}
+    const out = new Map()
+    board.flows.forEach((f) => f.items.forEach((i) => {
+      const s = sig(i)
+      seen[s] = (seen[s] ?? 0) + 1
+      out.set(i, `${s}\u0000${seen[s]}`)
+    }))
+    return out
+  }
+  const before = index(parse(base))
+  const after = new Map([...index(parse(text))].map(([item, s]) => [s, item]))
+  const byLine = new Map([...before].filter(([i]) => !i.id).map(([i, s]) => [`L${i.line}`, s]))
+  return ops.flatMap((op) => {
+    if (!isLineKey(op.id)) return [op]
+    const target = after.get(byLine.get(op.id))
+    return target ? [{ ...op, id: key(target) }] : []
+  })
+}
+
+export function applyOps(text, ops, base = text) {
+  if (base !== text) ops = rebase(ops, base, text)
   const assigned = {}
   let out = text
   // Line keys (`L<n>`) point into the original text: give those stickers ids before anything moves.
   const board = parse(text)
   const lines = board.lines.slice()
   for (const op of ops) {
-    const found = op.id?.startsWith('L') && !assigned[op.id] && findItem(board, op.id)
+    const found = isLineKey(op.id) && !assigned[op.id] && findItem(board, op.id)
     if (!found) continue
     const id = newId(board, new Set(Object.values(assigned)))
     assigned[op.id] = id

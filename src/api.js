@@ -9,7 +9,7 @@ const send = (method, url, body) =>
 
 export const listBoards = () => fetch('/api/boards').then(asJson)
 export const getBoard = (slug) => fetch(`/api/boards/${encodeURIComponent(slug)}`).then(asJson)
-export const postOps = (slug, ops) => send('POST', `/api/boards/${encodeURIComponent(slug)}/ops`, { ops, clientId })
+export const postOps = (slug, ops, base) => send('POST', `/api/boards/${encodeURIComponent(slug)}/ops`, { ops, base, clientId })
 export const putExtras = (slug, extras) => send('PUT', `/api/boards/${encodeURIComponent(slug)}/extras`, { extras })
 
 export function subscribe(onBoard) {

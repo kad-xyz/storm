@@ -118,3 +118,35 @@ describe('storm api', () => {
     expect((await fetch(`${base}/api/boards/..%2Fetc`)).status).toBe(400)
   })
 })
+
+describe('storm api hardening', () => {
+  it('rejects ops without json content type', async () => {
+    const res = await fetch(`${base}/api/boards/auth/ops`, {
+      method: 'POST', headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ ops: [{ op: 'delete', id: 'h1' }] }),
+    })
+    expect(res.status).toBe(415)
+    expect(fs.readFileSync(path.join(dir, 'auth.md'), 'utf8')).toBe(AUTH)
+  })
+
+  it('rejects requests from another origin', async () => {
+    const res = await fetch(`${base}/api/boards/auth/ops`, {
+      method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+      body: JSON.stringify({ ops: [{ op: 'delete', id: 'h1' }] }),
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('ops are rebased when sent with a stale base', async () => {
+    const current = AUTH.replace('## flow\n', '## flow\nactor Новый\n')
+    fs.writeFileSync(path.join(dir, 'auth.md'), current)
+    const cmdLine = AUTH.split('\n').findIndex((l) => l.startsWith('command'))
+    const res = await fetch(`${base}/api/boards/auth/ops`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ base: AUTH, ops: [{ op: 'edit', id: `L${cmdLine}`, text: 'Войти' }] }),
+    })
+    const { text } = await res.json()
+    expect(text).toContain('actor Новый')
+    expect(text).toMatch(/command Войти +@s1/)
+  })
+})

@@ -59,8 +59,9 @@ describe('dropTarget', () => {
   })
 
   it('drop beyond bounds clamps', () => {
-    expect(dropTarget(board, 'event', 10000, 0)).toEqual({ flow: 0, column: 1 })
-    expect(dropTarget(board, 'event', 10000, 100000)).toEqual({ flow: 1, column: 0 })
+    expect(dropTarget(board, 'command', 10000, 0)).toEqual({ flow: 0, column: 1 })
+    expect(dropTarget(board, 'event', 10000, 0)).toEqual({ flow: 0, column: 2 })
+    expect(dropTarget(board, 'command', 10000, 100000)).toEqual({ flow: 1, column: 0 })
     expect(dropTarget(board, 'event', -500, -500)).toEqual({ flow: 0, column: 0 })
   })
 })

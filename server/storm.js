@@ -42,7 +42,10 @@ export function createStorm({ boardsDir }) {
   }
   const readBody = (req) => new Promise((resolve, reject) => {
     let data = ''
-    req.on('data', (c) => (data += c))
+    req.on('data', (c) => {
+      data += c
+      if (data.length > 1e6) req.destroy(new Error('body too large'))
+    })
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')) } catch (e) { reject(e) } })
     req.on('error', reject)
   })
@@ -53,6 +56,12 @@ export function createStorm({ boardsDir }) {
   async function middleware(req, res, next) {
     const url = new URL(req.url, 'http://x')
     if (!url.pathname.startsWith('/api/')) return next()
+    // Only this page may write: other sites could otherwise post "simple" requests to localhost.
+    if (req.method !== 'GET') {
+      const origin = req.headers.origin
+      if (origin && new URL(origin).host !== req.headers.host) return json(res, 403, { error: 'foreign origin' })
+      if (!/^application\/json\b/.test(req.headers['content-type'] ?? '')) return json(res, 415, { error: 'json only' })
+    }
     try {
       if (url.pathname === '/api/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
@@ -78,9 +87,9 @@ export function createStorm({ boardsDir }) {
         return json(res, 200, { text: fs.readFileSync(file(slug), 'utf8'), extras: readExtras(slug) })
       }
       if (m[2] === 'ops' && req.method === 'POST') {
-        const { ops = [], clientId = 'page' } = await readBody(req)
+        const { ops = [], clientId = 'page', base } = await readBody(req)
         const current = fs.readFileSync(file(slug), 'utf8')
-        const { text, assigned } = applyOps(current, ops)
+        const { text, assigned } = applyOps(current, ops, base ?? current)
         if (text !== current) {
           known.set(slug, text)
           fs.writeFileSync(file(slug), text)
