@@ -1,5 +1,5 @@
 export const AUTH = `# Авторизация по паролю
-source: InterChess MR !123, TRACKER-456
+source: MR !123, TASK-456
 phase: 2
 
 ## flow
