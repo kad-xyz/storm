@@ -1,0 +1,22 @@
+{
+  "name": "storm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Event Storming board on Excalidraw, driven by a plain-text file",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "vite",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
