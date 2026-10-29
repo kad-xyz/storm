@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parse, applyOps, columns } from '../src/core/format.js'
 import { layout, dropTarget } from '../src/core/layout.js'
 
-describe('review fixes', () => {
+describe('edge cases', () => {
   it('stale line keys are rebased onto the current file', () => {
     const base = '## flow\ncommand A\nevent E @e'
     const current = '## flow\nactor Кто-то\ncommand A\nevent E @e'
